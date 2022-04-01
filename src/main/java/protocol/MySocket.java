@@ -37,7 +37,6 @@ public class MySocket {
 
     // TODO: Client initialize a connection: 3 handshakes
 
-
   }
 
   public OutputStream getOutputStream() {
@@ -75,19 +74,44 @@ public class MySocket {
           @Override
           public void flush() throws IOException {
             super.flush();
+
+            // TODO: build connection to the receiver
+
+            /*
+            TODO: an example of how to build a UDP packet from TCP payload:
+              TCP payload -> TCP packet == UDP payload -> UDP request packet
+            */
+            MyTcpPacket myTcpPacket = null;
+            try {
+              myTcpPacket =
+                  new MyTcpPacket.Builder()
+                      .withPacketType(PacketType.SYN)
+                      .withSequenceNum(0)
+                      .withPeerAddress(destAddress)
+                      .withPeerPort(destPort)
+                      .withPayload(buf)
+                      .build();
+            } catch (MessageTooLongException e) {
+              e.printStackTrace();
+            }
+
+            assert myTcpPacket != null;
+            var udpPayload = myTcpPacket.toBytes();
             // send packet
-            DatagramPacket request =
-                new DatagramPacket(buf, counter, InetAddress.getByName(routerAddress), routerPort);
-            datagramSocket.send(request);
+            var udpRequestPacket =
+                new DatagramPacket(
+                    udpPayload,
+                    udpPayload.length,
+                    InetAddress.getByName(routerAddress),
+                    routerPort);
+
+            datagramSocket.send(udpRequestPacket);
 
             // receive into the same buffer, start from the beginning
             counter = 0;
 
             response = new DatagramPacket(buf, buf.length);
             datagramSocket.receive(response);
-
-            // TODO: handle MyTCP headers
-
           }
         };
 
