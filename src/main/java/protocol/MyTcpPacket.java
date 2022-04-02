@@ -51,6 +51,18 @@ public class MyTcpPacket {
     return packetAsBytes;
   }
 
+  public static MyTcpPacket fromByte(byte[] data) {
+    return null;
+  }
+
+  public int getSequenceNum() {
+    return sequenceNum;
+  }
+
+  public PacketType getPacketType(){
+    return packetType;
+  }
+
   static class Builder {
     private PacketType packetType;
     private int sequenceNum;

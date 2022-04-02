@@ -21,21 +21,16 @@ public class MySocket {
   private byte[] buf = new byte[1024];
   private int counter = 0;
 
-  DatagramSocket datagramSocket;
-  DatagramPacket response;
+  private MyTcpClient myTcpClient;
 
-  public MySocket(String host, int port) {
-    try {
-      datagramSocket = new DatagramSocket();
-    } catch (SocketException e) {
-      e.printStackTrace();
-    }
 
-    this.destAddress = host;
-    this.destPort = port;
+  public MySocket(String host, int port) throws IOException {
+
+    myTcpClient = new MyTcpClient(host, port);
     this.initStreams();
 
-    // TODO: Client initialize a connection: 3 handshakes
+    // TODO: connect
+    myTcpClient.connect();
 
   }
 
@@ -47,7 +42,9 @@ public class MySocket {
     return this.userInputStream;
   }
 
-  public void close() {}
+  public void close() {
+    myTcpClient.close();
+  }
 
   // throws something if exceeding buffer size
   private void ensureCapacity(int minCapacity) throws Exception {
@@ -75,7 +72,7 @@ public class MySocket {
           public void flush() throws IOException {
             super.flush();
 
-            // TODO: build connection to the receiver
+            myTcpClient.send(buf);
 
             /*
             TODO: an example of how to build a UDP packet from TCP payload:
@@ -104,14 +101,6 @@ public class MySocket {
                     udpPayload.length,
                     InetAddress.getByName(routerAddress),
                     routerPort);
-
-            datagramSocket.send(udpRequestPacket);
-
-            // receive into the same buffer, start from the beginning
-            counter = 0;
-
-            response = new DatagramPacket(buf, buf.length);
-            datagramSocket.receive(response);
           }
         };
 
@@ -119,12 +108,14 @@ public class MySocket {
         new InputStream() {
           @Override
           public int read() throws IOException {
-            if (counter < response.getLength()) {
-              counter += 1;
-              return buf[counter] & 0xff;
-            } else {
-              return -1;
-            }
+            //TODO
+            return 0;
+//            if (counter < response.getLength()) {
+//              counter += 1;
+//              return buf[counter] & 0xff;
+//            } else {
+//              return -1;
+//            }
           }
         };
   }
