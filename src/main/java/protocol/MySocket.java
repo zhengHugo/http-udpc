@@ -24,13 +24,15 @@ public class MySocket {
   private MyTcpClient myTcpClient;
 
 
-  public MySocket(String host, int port) throws IOException {
+  public MySocket(String host, int port)
+          throws IOException, MessageTooLongException {
 
     myTcpClient = new MyTcpClient(host, port);
     this.initStreams();
 
     // TODO: connect
     myTcpClient.connect();
+    myTcpClient.send(buf);
 
   }
 
@@ -72,7 +74,11 @@ public class MySocket {
           public void flush() throws IOException {
             super.flush();
 
-            myTcpClient.send(buf);
+            try {
+              myTcpClient.send(buf);
+            } catch (MessageTooLongException e) {
+              e.printStackTrace();
+            }
 
             /*
             TODO: an example of how to build a UDP packet from TCP payload:

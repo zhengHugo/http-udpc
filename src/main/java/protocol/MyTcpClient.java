@@ -5,6 +5,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.nio.channels.DatagramChannel;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -54,8 +55,20 @@ public class MyTcpClient {
     }
   }
 
-  void send(byte[] data) {
-
+  void send(byte[] data) throws MessageTooLongException, IOException {
+    var ConnectionWithDataRequest =
+            new MyTcpPacket.Builder()
+                    .withPacketType(PacketType.SYN)
+                    .withSequenceNum(INIT_SEQ_NUM + 1)
+                    .withPeerAddress(destAddress)
+                    .withPeerPort(destPort)
+                    .withPayload(data)
+                    .build();
+    sendPacket(ConnectionWithDataRequest);
+    var firstConnectionResponse = receivePacket();
+    if (!firstConnectionResponse.getPacketType().equals(PacketType.SYN_ACK)) {
+      throw new IOException("Connection fail");
+    }
   }
 
   void close() {}
@@ -88,6 +101,7 @@ public class MyTcpClient {
     response = new DatagramPacket(buf, buf.length);
     datagramSocket.receive(response);
     var receivedTcpPacket = MyTcpPacket.fromByte(response.getData());
+    assert receivedTcpPacket != null;
     timers[receivedTcpPacket.getSequenceNum() % windowSize].cancel();
     unAckedPacketNum--;
     return receivedTcpPacket;
