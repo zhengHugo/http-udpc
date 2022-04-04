@@ -33,9 +33,13 @@ public class MyTcpHost {
   private HostState state;
 
   public MyTcpHost(int port) throws SocketException {
-    datagramSocket = new DatagramSocket();
     this.listenPort = port;
+    datagramSocket = new DatagramSocket(listenPort);
     this.state = HostState.LISTEN;
+    timers = new Timer[windowSize];
+    for (int i = 0; i < windowSize; i++) {
+      timers[i] = new Timer();
+    }
   }
 
   public MyTcpHost(String host, int port) throws SocketException {
@@ -46,6 +50,9 @@ public class MyTcpHost {
     this.listenPort = DEFAULT_LISTEN_PORT;
     this.state = HostState.LISTEN;
     timers = new Timer[windowSize];
+    for (int i = 0; i < windowSize; i++) {
+      timers[i] = new Timer();
+    }
   }
 
   public void connect() throws IOException {
@@ -59,14 +66,18 @@ public class MyTcpHost {
             .withSequenceNum(sequenceNum++)
             .withPeerAddress(destAddress)
             .withPeerPort(destPort)
+            .withPayload(new byte[1013])
             .build();
 
     sendPacket(firstConnectionRequest);
+    System.out.println("Sent first connection packet");
     var firstConnectionResponse = receivePacket();
+    System.out.println("received first connection response");
     if (!firstConnectionResponse.getPacketType().equals(PacketType.SYN_ACK)
         || firstConnectionResponse.getSequenceNum() != sequenceNum - 1) {
       throw new IOException("Connection fail");
     }
+    this.state = HostState.SYNSENT;
   }
 
   public void send(byte[] data) throws MessageTooLongException, IOException {
@@ -113,6 +124,7 @@ public class MyTcpHost {
               .withPeerAddress(incomingPacket.getPeerAddress())
               .withPeerPort(incomingPacket.getPeerPort())
               .withSequenceNum(incomingPacket.getSequenceNum())
+              .withPayload(new byte[1])
               .build();
       sendPacket(firstConnectionResponse);
       this.state = HostState.SYN_RCVD;
@@ -148,10 +160,7 @@ public class MyTcpHost {
     byte[] buf = new byte[4095];
     response = new DatagramPacket(buf, buf.length);
     datagramSocket.receive(response);
-    var receivedTcpPacket = MyTcpPacket.fromByte(response.getData());
-    timers[receivedTcpPacket.getSequenceNum() % windowSize].cancel();
-    unAckedPacketNum--;
-    return receivedTcpPacket;
+    return MyTcpPacket.fromByte(response.getData());
   }
 }
 

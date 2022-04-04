@@ -3,15 +3,14 @@ package protocol;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.SocketException;
 
 public class MySocket {
   private InputStream userInputStream;
   private OutputStream userOutputStream;
 
-  private byte[] writeBuffer = new byte[2048];
+  private byte[] writeBuffer = new byte[1013];
   private int writeCounter = 0;
-  private byte[] readBuffer;
+  private byte[] readBuffer = new byte[1013];
   private int readCounter = 0;
 
   private MyTcpHost myTcpHost;
@@ -32,7 +31,7 @@ public class MySocket {
     return this.userOutputStream;
   }
 
-  public InputStream getUserInputStream() {
+  public InputStream getInputStream() {
     return this.userInputStream;
   }
 

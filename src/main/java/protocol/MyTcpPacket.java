@@ -93,6 +93,7 @@ public class MyTcpPacket {
     myTcpPacket.peerPort += (data[9] & 0xff) << 8;
     myTcpPacket.peerPort += data[10] & 0xff;
 
+    myTcpPacket.payload = new byte[1013];
     System.arraycopy(data, 11, myTcpPacket.payload, 0, 1013);
 
     return myTcpPacket;
@@ -134,7 +135,7 @@ public class MyTcpPacket {
     }
 
     Builder withPayload(byte[] payload) throws MessageTooLongException {
-      if (payload.length> 1013) {
+      if (payload.length > 1013) {
         throw new MessageTooLongException("Payload in a single MyTCP message exceeds 1013 bytes");
       }
       this.payload = payload;
