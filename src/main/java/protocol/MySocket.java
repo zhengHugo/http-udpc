@@ -3,35 +3,29 @@ package protocol;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.SocketException;
 
 public class MySocket {
   private InputStream userInputStream;
   private OutputStream userOutputStream;
 
-  private String routerAddress;
-  private int routerPort;
+  private byte[] writeBuffer = new byte[2048];
+  private int writeCounter = 0;
+  private byte[] readBuffer;
+  private int readCounter = 0;
 
-  private String destAddress;
-  private int destPort;
+  private MyTcpHost myTcpHost;
 
-  private byte[] buf = new byte[1024];
-  private int counter = 0;
-
-  private MyTcpClient myTcpClient;
-
+  public MySocket(MyTcpHost myTcpHost) {
+    this.myTcpHost = myTcpHost;
+    this.initStreams();
+  }
 
   public MySocket(String host, int port) throws IOException {
 
-    myTcpClient = new MyTcpClient(host, port);
+    myTcpHost = new MyTcpHost(host, port);
     this.initStreams();
-
-    // TODO: connect
-    myTcpClient.connect();
-
+    myTcpHost.connect();
   }
 
   public OutputStream getOutputStream() {
@@ -43,12 +37,12 @@ public class MySocket {
   }
 
   public void close() {
-    myTcpClient.close();
+    myTcpHost.close();
   }
 
   // throws something if exceeding buffer size
-  private void ensureCapacity(int minCapacity) throws Exception {
-    if (buf.length < minCapacity) {
+  private void ensureCapacity(int minCapacity) throws MessageTooLongException {
+    if (writeBuffer.length < minCapacity) {
       throw new MessageTooLongException("Message is too long to send");
     }
   }
@@ -59,48 +53,20 @@ public class MySocket {
 
           @Override
           public void write(int b) throws IOException {
-            try {
-              ensureCapacity(counter + 1);
-            } catch (Exception e) {
-              e.printStackTrace();
-            }
-            buf[counter] = (byte) b;
-            counter += 1;
+            ensureCapacity(writeCounter + 1);
+            writeBuffer[writeCounter] = (byte) b;
+            writeCounter += 1;
           }
 
           @Override
           public void flush() throws IOException {
             super.flush();
 
-            myTcpClient.send(buf);
-
-            /*
-            TODO: an example of how to build a UDP packet from TCP payload:
-              TCP payload -> TCP packet == UDP payload -> UDP request packet
-            */
-            MyTcpPacket myTcpPacket = null;
             try {
-              myTcpPacket =
-                  new MyTcpPacket.Builder()
-                      .withPacketType(PacketType.SYN)
-                      .withSequenceNum(0)
-                      .withPeerAddress(destAddress)
-                      .withPeerPort(destPort)
-                      .withPayload(buf)
-                      .build();
+              myTcpHost.send(writeBuffer);
             } catch (MessageTooLongException e) {
               e.printStackTrace();
             }
-
-            assert myTcpPacket != null;
-            var udpPayload = myTcpPacket.toBytes();
-            // send packet
-            var udpRequestPacket =
-                new DatagramPacket(
-                    udpPayload,
-                    udpPayload.length,
-                    InetAddress.getByName(routerAddress),
-                    routerPort);
           }
         };
 
@@ -108,14 +74,11 @@ public class MySocket {
         new InputStream() {
           @Override
           public int read() throws IOException {
-            //TODO
-            return 0;
-//            if (counter < response.getLength()) {
-//              counter += 1;
-//              return buf[counter] & 0xff;
-//            } else {
-//              return -1;
-//            }
+            if (readBuffer[readCounter] == 0) {
+              readCounter = 0;
+              readBuffer = myTcpHost.receive();
+            }
+            return readBuffer[readCounter++];
           }
         };
   }

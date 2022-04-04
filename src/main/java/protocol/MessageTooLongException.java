@@ -1,9 +1,10 @@
 package protocol;
 
-public class MessageTooLongException extends Exception {
+import java.io.IOException;
+
+public class MessageTooLongException extends IOException {
 
   public MessageTooLongException(String message) {
     super(message);
   }
-
 }

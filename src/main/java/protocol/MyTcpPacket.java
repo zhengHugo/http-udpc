@@ -6,12 +6,27 @@ A MyTcpPacket can be build from its Builder class and used as payload in a UDP r
  */
 public class MyTcpPacket {
 
-  private final PacketType packetType;
-  private final int sequenceNum;
-  private final String peerAddress;
-  private final int peerPort;
-  private final byte[] payload;
+  private PacketType packetType;
+  private int sequenceNum;
+  private String peerAddress;
+  private int peerPort;
+  private byte[] payload;
 
+  public String getPeerAddress() {
+    return peerAddress;
+  }
+
+  public int getPeerPort() {
+    return peerPort;
+  }
+
+  public byte[] getPayload() {
+    return payload;
+  }
+
+
+  private MyTcpPacket() {
+  }
 
   private MyTcpPacket(PacketType packetType, int sequenceNum, String peerAddress, int peerPort,
       byte[] payload) {
@@ -52,7 +67,35 @@ public class MyTcpPacket {
   }
 
   public static MyTcpPacket fromByte(byte[] data) {
-    return null;
+    MyTcpPacket myTcpPacket = new MyTcpPacket();
+
+    // packet type
+    myTcpPacket.packetType = PacketType.fromByte(data[0]);
+
+    // sequence number
+    myTcpPacket.sequenceNum = 0;
+    myTcpPacket.sequenceNum += (data[1] & 0xff) << 24 ;
+    myTcpPacket.sequenceNum += (data[2] & 0xff) << 16;
+    myTcpPacket.sequenceNum += (data[3] & 0xff) << 8;
+    myTcpPacket.sequenceNum += data[4] & 0xff;
+
+    // peer address
+    myTcpPacket.peerAddress = (data[5] & 0xff)
+        + "."
+        + (data[6] & 0xff)
+        + "."
+        + (data[7] & 0xff)
+        + "."
+        + (data[8] & 0xff);
+
+    // port
+    myTcpPacket.peerPort = 0;
+    myTcpPacket.peerPort += (data[9] & 0xff) << 8;
+    myTcpPacket.peerPort += data[10] & 0xff;
+
+    System.arraycopy(data, 11, myTcpPacket.payload, 0, 1013);
+
+    return myTcpPacket;
   }
 
   public int getSequenceNum() {
@@ -121,7 +164,7 @@ enum PacketType {
     };
   }
 
-  PacketType fromByte(byte packetTypeAsByte) {
+  static PacketType fromByte(byte packetTypeAsByte) {
     return switch (packetTypeAsByte) {
       case 0 -> DATA;
       case 1 -> ACK;
