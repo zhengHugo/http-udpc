@@ -32,6 +32,8 @@ public class MyTcpHost {
 
   private HostState state;
 
+  private boolean isClient;
+
   public MyTcpHost(int port) throws SocketException {
     this.listenPort = port;
     datagramSocket = new DatagramSocket(listenPort);
@@ -56,6 +58,7 @@ public class MyTcpHost {
   }
 
   public void connect() throws IOException {
+    this.isClient = true;
     if (!state.equals(HostState.LISTEN)) {
       throw new MySocketException("Connection has already opened");
     }
@@ -63,16 +66,29 @@ public class MyTcpHost {
     var firstConnectionRequest =
         new MyTcpPacket.Builder()
             .withPacketType(PacketType.SYN)
-            .withSequenceNum(sequenceNum++)
+            .withSequenceNum(sequenceNum)
             .withPeerAddress(destAddress)
             .withPeerPort(destPort)
             .withPayload(new byte[1013])
             .build();
 
     sendPacket(firstConnectionRequest);
+    timers[0].schedule(
+        new TimerTask() {
+          @Override
+          public void run() {
+            try {
+              sendPacket(firstConnectionRequest);
+            } catch (IOException e) {
+              e.printStackTrace();
+            }
+          }
+        },
+        timeout);
     System.out.println("Sent first connection packet");
     var firstConnectionResponse = receivePacket();
-    System.out.println("received first connection response");
+    timers[0].cancel();
+    System.out.println("received first connection packet");
     if (!firstConnectionResponse.getPacketType().equals(PacketType.SYN_ACK)
         || firstConnectionResponse.getSequenceNum() != sequenceNum - 1) {
       throw new IOException("Connection fail");
@@ -80,40 +96,8 @@ public class MyTcpHost {
     this.state = HostState.SYNSENT;
   }
 
-  public void send(byte[] data) throws MessageTooLongException, IOException {
-    if (unAckedPacketNum < windowSize) {
-      var packetBuilder =
-          new MyTcpPacket.Builder()
-              .withSequenceNum(sequenceNum++)
-              .withPeerAddress(destAddress)
-              .withPeerPort(destPort)
-              .withPayload(data);
-      MyTcpPacket requestPacket = null;
-      if (this.state.equals(HostState.SYNSENT)) {
-        requestPacket = packetBuilder.withPacketType(PacketType.ACK).build();
-      } else if (this.state.equals(HostState.ESTAB)) {
-        requestPacket = packetBuilder.withPacketType(PacketType.DATA).build();
-      }
-      assert requestPacket != null;
-      sendPacket(requestPacket);
-      this.state = HostState.ESTAB;
-      this.unAckedPacketNum++;
-    }
-  }
-
-  public byte[] receive() throws IOException {
-    var incomingPacket = receivePacket();
-    if (incomingPacket.getPacketType().equals(PacketType.ACK)
-        && incomingPacket.getSequenceNum() == sequenceNum) {
-      timers[sequenceNum].cancel();
-      this.unAckedPacketNum--;
-      return incomingPacket.getPayload();
-    } else {
-      return receive();
-    }
-  }
-
   public void accept() throws IOException {
+    this.isClient = false;
     var incomingPacket = receivePacket();
     if (this.state.equals(HostState.LISTEN)
         && incomingPacket.getPacketType().equals(PacketType.SYN)
@@ -131,6 +115,85 @@ public class MyTcpHost {
     }
   }
 
+  public void send(byte[] data) throws MessageTooLongException, IOException {
+    if (unAckedPacketNum < windowSize) {
+      var packetBuilder =
+          new MyTcpPacket.Builder()
+              .withSequenceNum(sequenceNum)
+              .withPeerAddress(destAddress)
+              .withPeerPort(destPort)
+              .withPayload(data);
+      MyTcpPacket requestPacket = null;
+      if (this.state.equals(HostState.SYNSENT)) {
+        // sender third handshake
+        requestPacket = packetBuilder.withPacketType(PacketType.ACK).build();
+        MyTcpPacket finalRequestPacket = requestPacket;
+        timers[1].schedule(
+            new TimerTask() {
+              @Override
+              public void run() {
+                try {
+                  sendPacket(finalRequestPacket);
+                } catch (IOException e) {
+                  e.printStackTrace();
+                }
+              }
+            },
+            timeout);
+      } else if (this.state.equals(HostState.ESTAB) && this.isClient) {
+        // sender send data
+        requestPacket = packetBuilder.withPacketType(PacketType.DATA).build();
+        MyTcpPacket finalRequestPacket = requestPacket;
+        timers[sequenceNum % windowSize].schedule(
+            new TimerTask() {
+              @Override
+              public void run() {
+                try {
+                  sendPacket(finalRequestPacket);
+                } catch (IOException e) {
+                  e.printStackTrace();
+                }
+              }
+            },
+            timeout);
+      } else if (this.state.equals(HostState.SYN_RCVD)) {
+        requestPacket = packetBuilder.withPacketType(PacketType.ACK).build();
+      } else if (this.state.equals(HostState.ESTAB) && !this.isClient) {
+        requestPacket = packetBuilder.withPacketType(PacketType.ACK).build();
+      }
+      System.out.println("This is client: " + this.isClient);
+      System.out.println("This state: " + this.state);
+      sendPacket(requestPacket);
+      this.state = HostState.ESTAB;
+      this.unAckedPacketNum++;
+    }
+  }
+
+  public byte[] receive() throws IOException {
+    var incomingPacket = receivePacket();
+    if (this.state.equals(HostState.ESTAB)
+        && incomingPacket.getPacketType().equals(PacketType.ACK)
+        && incomingPacket.getSequenceNum() == sequenceNum - 1) {
+      // sender received response
+      timers[sequenceNum - 1].cancel();
+      this.unAckedPacketNum--;
+      return incomingPacket.getPayload();
+    } else if ((this.state.equals(HostState.SYN_RCVD)
+            && incomingPacket.getPacketType().equals(PacketType.ACK))
+        || (this.state.equals(HostState.ESTAB)
+                && incomingPacket.getPacketType().equals(PacketType.DATA))
+            && (incomingPacket.getSequenceNum() == sequenceNum)) {
+      // receiver receive or third handshake
+      timers[sequenceNum].cancel();
+      this.unAckedPacketNum--;
+      this.destAddress = incomingPacket.getPeerAddress();
+      this.destPort = incomingPacket.getPeerPort();
+      return incomingPacket.getPayload();
+    } else {
+      return receive();
+    }
+  }
+
   void close() {}
 
   private void sendPacket(MyTcpPacket packet) throws IOException {
@@ -139,28 +202,23 @@ public class MyTcpHost {
     var udpRequestPacket =
         new DatagramPacket(
             udpPayload, udpPayload.length, InetAddress.getByName(routerAddress), routerPort);
-
-    timers[packet.getSequenceNum() % windowSize].schedule(
-        new TimerTask() {
-          @Override
-          public void run() {
-            try {
-              sendPacket(packet);
-            } catch (IOException e) {
-              e.printStackTrace();
-            }
-          }
-        },
-        timeout);
+    sequenceNum++;
     datagramSocket.send(udpRequestPacket);
-    unAckedPacketNum++;
+    System.out.println(
+        "send packet seq num: " + packet.getSequenceNum() + " type: " + packet.getPacketType());
   }
 
   private MyTcpPacket receivePacket() throws IOException {
     byte[] buf = new byte[4095];
     response = new DatagramPacket(buf, buf.length);
     datagramSocket.receive(response);
-    return MyTcpPacket.fromByte(response.getData());
+    var tcpResponse = MyTcpPacket.fromByte(response.getData());
+    System.out.println(
+        "receive packet seq num: "
+            + tcpResponse.getSequenceNum()
+            + " type: "
+            + tcpResponse.getPacketType());
+    return tcpResponse;
   }
 }
 

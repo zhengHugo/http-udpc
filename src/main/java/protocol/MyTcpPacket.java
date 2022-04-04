@@ -153,7 +153,7 @@ enum PacketType {
   ACK,
   SYN,
   SYN_ACK,
-  NAK;
+  DATA_ACK;
 
   byte toByte() {
     return (byte)switch (this) {
@@ -161,7 +161,7 @@ enum PacketType {
       case ACK -> 1;
       case SYN -> 2;
       case SYN_ACK -> 3;
-      case NAK -> 4;
+      case DATA_ACK -> 4;
     };
   }
 
@@ -171,7 +171,7 @@ enum PacketType {
       case 1 -> ACK;
       case 2 -> SYN;
       case 3 -> SYN_ACK;
-      case 4 -> NAK;
+      case 4 -> DATA_ACK;
       default -> throw new IllegalArgumentException("Invalid byte for a packet type");
     };
   }

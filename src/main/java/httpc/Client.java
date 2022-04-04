@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import protocol.MySocket;
 
 public class Client {
@@ -22,16 +23,16 @@ public class Client {
 
   public Response sendAndGetRes(Request request) throws IOException {
     MySocket socket = new MySocket(request.getUrlObject().getHost(), port);
-    PrintStream out = new PrintStream(socket.getOutputStream());
-    BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    PrintStream out = new PrintStream(socket.getOutputStream(), false);
+    BufferedReader in =
+        new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 
     String responseText;
     System.out.println(request);
     out.println(request);
-    out.flush();
+    out.close();
     responseText = this.readAllResponse(in);
     in.close();
-    out.close();
     socket.close();
     return new Response(responseText);
   }
