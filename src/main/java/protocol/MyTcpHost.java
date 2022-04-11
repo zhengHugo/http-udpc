@@ -1,6 +1,5 @@
 package protocol;
 
-
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -170,8 +169,8 @@ public class MyTcpHost {
         // receiver response to third handshake
         packetToSend = packetBuilder.withPacketType(PacketType.ACK).build();
         this.lastSentPacket = packetToSend;
-//      } else if (this.state.equals(HostState.ESTAB) && !this.isClient) {
-//        packetToSend = packetBuilder.withPacketType(ACK).build();
+        //      } else if (this.state.equals(HostState.ESTAB) && !this.isClient) {
+        //        packetToSend = packetBuilder.withPacketType(ACK).build();
       }
       System.out.println("This is client: " + this.isClient);
       System.out.println("This state: " + this.state);
@@ -198,7 +197,8 @@ public class MyTcpHost {
       serverSendLastClose();
       receiveLastClosePacket();
       return null;
-    } else if ((this.state.equals(HostState.SYN_RCVD) && incomingPacket.getPacketType().equals(PacketType.DATA))
+    } else if ((this.state.equals(HostState.SYN_RCVD)
+            && incomingPacket.getPacketType().equals(PacketType.ACK))
         || (this.state.equals(HostState.ESTAB)
             && incomingPacket.getPacketType().equals(PacketType.DATA))) {
 
@@ -246,19 +246,23 @@ public class MyTcpHost {
     System.out.println(
         "receive packet seq num: "
             + tcpResponse.getSequenceNum()
-            + " type: "
-            + tcpResponse.getPacketType());
+            + ", type: "
+            + tcpResponse.getPacketType()
+            + ", length: "
+            + tcpResponse.getPayload().length);
     return tcpResponse;
   }
 
   public void clientSendClose() throws IOException {
     if (this.isClient) {
-      var packetBuilder =
-          new MyTcpPacket.Builder().withPeerAddress(destAddress).withPeerPort(destPort);
-      MyTcpPacket requestPacket = null;
-      packetBuilder.withPacketType(PacketType.FIN);
-      requestPacket = packetBuilder.withSequenceNum(sequenceNum).build();
-      MyTcpPacket closeRequestPacket = requestPacket;
+      var closeRequestPacket =
+          new MyTcpPacket.Builder()
+              .withPeerAddress(destAddress)
+              .withPeerPort(destPort)
+              .withPacketType(PacketType.FIN)
+              .withSequenceNum(sequenceNum)
+              .withPayload(new byte[1])
+              .build();
       timers[sequenceNum % windowSize].schedule(
           new TimerTask() {
             @Override
