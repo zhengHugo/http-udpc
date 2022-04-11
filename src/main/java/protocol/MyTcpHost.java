@@ -17,6 +17,7 @@ public class MyTcpHost {
 
   private String routerAddress = "127.0.0.1";
   private int routerPort = 3000;
+  private int closeSequenceNum = 7;
 
   private DatagramSocket datagramSocket;
   private DatagramPacket response;
@@ -194,7 +195,12 @@ public class MyTcpHost {
     }
   }
 
-  void close() {}
+  void close() throws IOException {
+    clientSendClose();
+    severSendClose();
+    severSendLastClose();
+    clientSendLastClose();
+  }
 
   private void sendPacket(MyTcpPacket packet) throws IOException {
     var udpPayload = packet.toBytes();
@@ -220,6 +226,90 @@ public class MyTcpHost {
             + tcpResponse.getPacketType());
     return tcpResponse;
   }
+
+  public void clientSendClose() throws IOException {
+
+      var packetBuilder =
+              new MyTcpPacket.Builder()
+                      .withPeerAddress(destAddress)
+                      .withPeerPort(destPort);
+      MyTcpPacket requestPacket = null;
+      packetBuilder.withPacketType(PacketType.FIN);
+      requestPacket = packetBuilder.withSequenceNum(sequenceNum).build();
+      MyTcpPacket closeRequestPacket = requestPacket;
+      timers[sequenceNum % windowSize].schedule(
+              new TimerTask() {
+                @Override
+                public void run() {
+                  try {
+                    sendPacket(closeRequestPacket);
+                  } catch (IOException e) {
+                    e.printStackTrace();
+                  }
+                }
+              },
+              timeout);
+      System.out.println("This is client: " + this.isClient);
+      System.out.println("This state: " + this.state);
+      sendPacket(closeRequestPacket);
+
+  }
+
+  public void severSendClose() throws IOException {
+    var incomingPacket = receivePacket();
+    // check receive
+    if ( incomingPacket.getPacketType().equals(PacketType.FIN)
+            && (incomingPacket.getSequenceNum() == sequenceNum)) {
+      timers[sequenceNum].cancel();
+      setClosePacket(incomingPacket);
+    }
+    else {
+      clientSendClose();
+    }
+  }
+
+  public void severSendLastClose() throws IOException {
+
+      var packetBuilder =
+              new MyTcpPacket.Builder()
+                      .withPeerAddress(destAddress)
+                      .withPeerPort(destPort);
+      MyTcpPacket requestPacket = null;
+      packetBuilder.withPacketType(PacketType.FIN);
+      requestPacket = packetBuilder.withSequenceNum(sequenceNum).build();
+      MyTcpPacket closeRequestPacket = requestPacket;
+      System.out.println("This is client: " + this.isClient);
+      System.out.println("This state: " + this.state);
+      sendPacket(closeRequestPacket);
+
+  }
+
+  public void clientSendLastClose() throws IOException {
+    var incomingPacket = receivePacket();
+    // check receive
+    if ( incomingPacket.getPacketType().equals(PacketType.FIN)
+            && (incomingPacket.getSequenceNum() == sequenceNum)) {
+      setClosePacket(incomingPacket);
+    }
+  }
+
+  private void setClosePacket(MyTcpPacket incomingPacket) throws IOException {
+    this.destAddress = incomingPacket.getPeerAddress();
+    this.destPort = incomingPacket.getPeerPort();
+
+    var packetBuilder =
+            new MyTcpPacket.Builder()
+                    .withPeerAddress(destAddress)
+                    .withPeerPort(destPort);
+    MyTcpPacket requestPacket = null;
+    packetBuilder.withPacketType(PacketType.ACK);
+    requestPacket = packetBuilder.withSequenceNum(sequenceNum).build();
+    MyTcpPacket closeRequestPacket = requestPacket;
+    System.out.println("This is client: " + this.isClient);
+    System.out.println("This state: " + this.state);
+    sendPacket(closeRequestPacket);
+  }
+
 }
 
 enum HostState {

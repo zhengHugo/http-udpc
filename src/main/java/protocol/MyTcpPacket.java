@@ -149,6 +149,7 @@ public class MyTcpPacket {
 }
 
 enum PacketType {
+  FIN,
   DATA,
   ACK,
   SYN,
